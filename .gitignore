@@ -4,8 +4,8 @@
 *.dll
 *.so
 *.dylib
-kost
-kost.exe
+/kost
+/kost.exe
 
 # Design doc (not project code)
 KOST.md
