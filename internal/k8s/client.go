@@ -85,6 +85,21 @@ func podRequest(pod *corev1.Pod, resource corev1.ResourceName) float64 {
 	return milliToCPU(total)
 }
 
+func parseContainer(r map[string]interface{}) (cpuMillis, memBytes int64) {
+	usage, _ := r["usage"].(map[string]interface{})
+	if s, ok := usage["cpu"].(string); ok {
+		if q, err := parseQuantity(s); err == nil {
+			cpuMillis = q
+		}
+	}
+	if s, ok := usage["memory"].(string); ok {
+		if q, err := parseQuantity(s); err == nil {
+			memBytes = q
+		}
+	}
+	return
+}
+
 func parseMetricsList(items []unstructured.Unstructured) map[string]cpuMem {
 	m := map[string]cpuMem{}
 	for _, item := range items {
@@ -99,17 +114,9 @@ func parseMetricsList(items []unstructured.Unstructured) map[string]cpuMem {
 			if !ok {
 				continue
 			}
-			usage, _ := cm["usage"].(map[string]interface{})
-			if cpuStr, ok := usage["cpu"].(string); ok {
-				if q, err := parseQuantity(cpuStr); err == nil {
-					cpu += q
-				}
-			}
-			if memStr, ok := usage["memory"].(string); ok {
-				if q, err := parseQuantity(memStr); err == nil {
-					mem += q
-				}
-			}
+			dc, dm := parseContainer(cm)
+			cpu += dc
+			mem += dm
 		}
 		m[key] = cpuMem{cpu, mem}
 	}
