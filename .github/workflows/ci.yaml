@@ -35,5 +35,5 @@ jobs:
         with:
           push: true
           tags: |
-            ghcr.io/nirjar/kost:${{ github.sha }}
-            ghcr.io/nirjar/kost:latest
+            ghcr.io/nirjxr26/Kost:${{ github.sha }}
+            ghcr.io/nirjxr26/Kost:latest

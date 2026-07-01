@@ -4,7 +4,7 @@ package analyze
 import (
 	"fmt"
 
-	"github.com/nirjar/kost/internal/k8s"
+	"github.com/nirjxr26/Kost/internal/k8s"
 )
 
 type Finding struct {

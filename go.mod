@@ -1,4 +1,4 @@
-module github.com/nirjar/kost
+module github.com/nirjxr26/Kost
 
 go 1.22.0
 

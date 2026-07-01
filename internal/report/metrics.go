@@ -6,7 +6,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/nirjar/kost/internal/analyze"
+	"github.com/nirjxr26/Kost/internal/analyze"
 )
 
 // LatestReport is a thread-safe holder for the most recent analysis.

@@ -7,7 +7,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/nirjar/kost/internal/analyze"
+	"github.com/nirjxr26/Kost/internal/analyze"
 )
 
 type reportEnvelope struct {
