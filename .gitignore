@@ -15,6 +15,7 @@ KOST.md
 .vscode/
 *.swp
 *.swo
+.agents/
 
 # OS
 .DS_Store

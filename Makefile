@@ -1,5 +1,5 @@
 BINARY=kost
-IMAGE=ghcr.io/nirjxr26/Kost
+IMAGE=ghcr.io/nirjxr26/kost
 
 build:
 	go build -o $(BINARY) ./cmd/kost/

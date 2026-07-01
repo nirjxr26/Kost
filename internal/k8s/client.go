@@ -14,6 +14,8 @@ import (
 	"k8s.io/client-go/rest"
 )
 
+type cpuMem struct{ cpuMillis, memBytes int64 }
+
 type PodUsage struct {
 	Namespace string
 	Name      string
@@ -83,6 +85,54 @@ func podRequest(pod *corev1.Pod, resource corev1.ResourceName) float64 {
 	return milliToCPU(total)
 }
 
+func parseContainer(r map[string]interface{}) (cpuMillis, memBytes int64) {
+	usage, _ := r["usage"].(map[string]interface{})
+	if s, ok := usage["cpu"].(string); ok {
+		if q, err := parseQuantity(s); err == nil {
+			cpuMillis = q
+		}
+	}
+	if s, ok := usage["memory"].(string); ok {
+		if q, err := parseQuantity(s); err == nil {
+			memBytes = q
+		}
+	}
+	return
+}
+
+func parseMetricsList(items []unstructured.Unstructured) map[string]cpuMem {
+	m := map[string]cpuMem{}
+	for _, item := range items {
+		key := item.GetNamespace() + "/" + item.GetName()
+		containers, found, _ := unstructured.NestedSlice(item.Object, "containers")
+		if !found {
+			continue
+		}
+		var cpu, mem int64
+		for _, c := range containers {
+			cm, ok := c.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			dc, dm := parseContainer(cm)
+			cpu += dc
+			mem += dm
+		}
+		m[key] = cpuMem{cpu, mem}
+	}
+	return m
+}
+
+func (c *Client) ownerFor(ctx context.Context, p *corev1.Pod) (kind, name string) {
+	kind, name = podOwner(p)
+	if kind == "ReplicaSet" {
+		if k, n := c.resolveReplicaSetOwner(ctx, p.Namespace, name); k != "" {
+			return k, n
+		}
+	}
+	return kind, name
+}
+
 // PodUsages fetches pods and their metrics-server usage in one pass.
 func (c *Client) PodUsages(ctx context.Context) ([]PodUsage, error) {
 	pods, err := c.ListPods(ctx)
@@ -95,36 +145,10 @@ func (c *Client) PodUsages(ctx context.Context) ([]PodUsage, error) {
 		Version:  "v1beta1",
 		Resource: "pods",
 	}).List(ctx, metav1.ListOptions{})
-	metricsAvailable := err == nil
 
-	usageMap := map[string]struct{ cpuMillis, memBytes int64 }{}
-	if metricsAvailable {
-		for _, item := range mres.Items {
-			key := item.GetNamespace() + "/" + item.GetName()
-			containers, found, _ := unstructured.NestedSlice(item.Object, "containers")
-			if !found {
-				continue
-			}
-			var cpu, mem int64
-			for _, c := range containers {
-				cm, ok := c.(map[string]interface{})
-				if !ok {
-					continue
-				}
-				usage, _ := cm["usage"].(map[string]interface{})
-				if cpuStr, ok := usage["cpu"].(string); ok {
-					if q, err := parseQuantity(cpuStr); err == nil {
-						cpu += q
-					}
-				}
-				if memStr, ok := usage["memory"].(string); ok {
-					if q, err := parseQuantity(memStr); err == nil {
-						mem += q
-					}
-				}
-			}
-			usageMap[key] = struct{ cpuMillis, memBytes int64 }{cpu, mem}
-		}
+	usageMap := map[string]cpuMem{}
+	if err == nil {
+		usageMap = parseMetricsList(mres.Items)
 	}
 
 	var result []PodUsage
@@ -133,16 +157,8 @@ func (c *Client) PodUsages(ctx context.Context) ([]PodUsage, error) {
 		if p.Status.Phase != corev1.PodRunning {
 			continue
 		}
-		key := p.Namespace + "/" + p.Name
-		u := usageMap[key]
-		ownerKind, ownerName := podOwner(p)
-		// Walk up ReplicaSet to find the real owner (Deployment)
-		if ownerKind == "ReplicaSet" {
-			ok, on := c.resolveReplicaSetOwner(ctx, p.Namespace, ownerName)
-			if ok != "" {
-				ownerKind, ownerName = ok, on
-			}
-		}
+		u := usageMap[p.Namespace+"/"+p.Name]
+		ownerKind, ownerName := c.ownerFor(ctx, p)
 		result = append(result, PodUsage{
 			Namespace:  p.Namespace,
 			Name:       p.Name,

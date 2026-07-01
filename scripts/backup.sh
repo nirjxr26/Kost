@@ -30,7 +30,7 @@ done
 
 # 3. Export Prometheus metrics snapshot
 KOST_POD=$(kubectl get pod -n "$NS" -l app=kost -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
-if [ -n "$KOST_POD" ]; then
+if [[ -n "$KOST_POD" ]]; then
   kubectl port-forward -n "$NS" "pod/$KOST_POD" 8081:8080 &
   PF_PID=$!
   sleep 2
