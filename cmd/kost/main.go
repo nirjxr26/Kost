@@ -20,6 +20,8 @@ import (
 const (
 	collectTimeout = 30 * time.Second
 	shutdownGrace  = 5 * time.Second
+	contentType    = "Content-Type"
+	textPlain      = "text/plain"
 )
 
 func main() {
@@ -65,27 +67,26 @@ func main() {
 	}
 }
 
-func healthHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/plain")
-	w.WriteHeader(http.StatusOK)
-	fmt.Fprintln(w, "ok")
+func writeResp(w http.ResponseWriter, status int, msg string) {
+	w.Header().Set(contentType, textPlain)
+	w.WriteHeader(status)
+	fmt.Fprintln(w, msg)
 }
 
-// readyHandler returns 200 only when the K8s client can list pods.
+func healthHandler(w http.ResponseWriter, r *http.Request) {
+	writeResp(w, http.StatusOK, "ok")
+}
+
 func readyHandler(client *k8s.Client) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 		defer cancel()
 		_, err := client.ListPods(ctx)
 		if err != nil {
-			w.Header().Set("Content-Type", "text/plain")
-			w.WriteHeader(http.StatusServiceUnavailable)
-			fmt.Fprintf(w, "not ready: %v\n", err)
+			writeResp(w, http.StatusServiceUnavailable, "not ready: "+err.Error())
 			return
 		}
-		w.Header().Set("Content-Type", "text/plain")
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprintln(w, "ready")
+		writeResp(w, http.StatusOK, "ready")
 	}
 }
 

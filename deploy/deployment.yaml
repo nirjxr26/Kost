@@ -22,7 +22,7 @@ spec:
         fsGroup: 65534
       containers:
         - name: kost
-          image: ghcr.io/nirjxr26/kost:latest
+          image: ghcr.io/nirjxr26/kost:e2e2f4d
           args:
             - -config=/etc/kost/config.json
           ports:
@@ -42,6 +42,7 @@ spec:
             requests:
               cpu: 50m
               memory: 32Mi
+              ephemeral-storage: 100Mi
             limits:
               cpu: 100m
               memory: 64Mi
