@@ -22,7 +22,7 @@ spec:
         fsGroup: 65534
       containers:
         - name: kost
-          image: ghcr.io/nirjxr26/Kost:latest
+          image: ghcr.io/nirjxr26/kost:latest
           args:
             - -config=/etc/kost/config.json
           ports:
