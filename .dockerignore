@@ -1,0 +1,12 @@
+.git/
+.gitignore
+.github/
+.gitattributes
+KOST.md
+README.md
+*.md
+deploy/
+Makefile
+.vscode/
+.idea/
+*.exe

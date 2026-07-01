@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kost-config
+  namespace: kost
+data:
+  config.json: |
+    {
+      "cluster_name": "prod",
+      "interval": "15m",
+      "cpu_per_core_hour": 0.0316,
+      "mem_per_gb_hour": 0.0042,
+      "waste_ratio": 1.5,
+      "min_waste_dollars": 5.00,
+      "port": 8080
+    }

@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kost
+  namespace: kost
+  labels:
+    app: kost
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kost
+  template:
+    metadata:
+      labels:
+        app: kost
+    spec:
+      serviceAccountName: kost
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        fsGroup: 65534
+      containers:
+        - name: kost
+          image: ghcr.io/nirjar/kost:latest
+          args:
+            - -config=/etc/kost/config.json
+          ports:
+            - containerPort: 8080
+              name: metrics
+          env:
+            - name: SLACK_WEBHOOK_URL
+              valueFrom:
+                secretKeyRef:
+                  name: kost-slack
+                  key: SLACK_WEBHOOK_URL
+                  optional: true
+          volumeMounts:
+            - name: config
+              mountPath: /etc/kost
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+      volumes:
+        - name: config
+          configMap:
+            name: kost-config
