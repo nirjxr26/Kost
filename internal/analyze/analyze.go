@@ -8,48 +8,54 @@ import (
 )
 
 type Finding struct {
-	Kind         string  `json:"kind"`
-	Namespace    string  `json:"namespace"`
-	Workload     string  `json:"workload"`
-	OwnerKind    string  `json:"owner_kind"`
-	OwnerName    string  `json:"owner_name"`
-	RequestCPU   float64 `json:"request_cpu"`
-	RequestMem   float64 `json:"request_mem"`
-	ActualCPU    float64 `json:"actual_cpu"`
-	ActualMem    float64 `json:"actual_mem"`
-	WasteCPU     float64 `json:"waste_cpu"`
-	WasteMem     float64 `json:"waste_mem"`
-	WasteMonthly float64 `json:"waste_monthly"`
-	FixCommand   string  `json:"fix_command"`
+	Kind          string  `json:"kind"`
+	Namespace     string  `json:"namespace"`
+	Workload      string  `json:"workload"`
+	OwnerKind     string  `json:"owner_kind"`
+	OwnerName     string  `json:"owner_name"`
+	RequestCPU    float64 `json:"request_cpu"`
+	RequestMem    float64 `json:"request_mem"`
+	ActualCPU     float64 `json:"actual_cpu"`
+	ActualMem     float64 `json:"actual_mem"`
+	WasteCPU      float64 `json:"waste_cpu"`
+	WasteMem      float64 `json:"waste_mem"`
+	WasteMonthly  float64 `json:"waste_monthly"`
+	WasteMonthlyINR float64 `json:"waste_monthly_inr"`
+	FixCommand    string  `json:"fix_command"`
 }
 
 type Report struct {
-	ClusterName string    `json:"cluster_name"`
-	Findings    []Finding `json:"findings"`
-	TotalWaste  float64   `json:"total_waste_monthly"`
+	ClusterName   string    `json:"cluster_name"`
+	Findings      []Finding `json:"findings"`
+	TotalWaste    float64   `json:"total_waste_monthly"`
+	TotalWasteINR float64   `json:"total_waste_monthly_inr"`
 }
 
 type Analyzer struct {
-	cluster  string
-	ratio    float64
-	minWaste float64
-	cpuPrice float64
-	memPrice float64
+	cluster   string
+	ratio     float64
+	minWaste  float64
+	cpuPrice  float64
+	memPrice  float64
+	cpuPriceINR float64
+	memPriceINR float64
 }
 
-func New(cluster string, ratio, minWaste, cpuPrice, memPrice float64) *Analyzer {
+func New(cluster string, ratio, minWaste, cpuPrice, memPrice, cpuPriceINR, memPriceINR float64) *Analyzer {
 	return &Analyzer{
-		cluster:  cluster,
-		ratio:    ratio,
-		minWaste: minWaste,
-		cpuPrice: cpuPrice,
-		memPrice: memPrice,
+		cluster:     cluster,
+		ratio:       ratio,
+		minWaste:    minWaste,
+		cpuPrice:    cpuPrice,
+		memPrice:    memPrice,
+		cpuPriceINR: cpuPriceINR,
+		memPriceINR: memPriceINR,
 	}
 }
 
 // Run flags over-provisioned pods where request > actual * ratio.
 func (a *Analyzer) Run(usages []k8s.PodUsage) *Report {
-	r := &Report{ClusterName: a.cluster}
+	r := &Report{ClusterName: a.cluster, Findings: []Finding{}}
 	for _, u := range usages {
 		wasteCPU := u.RequestCPU - u.ActualCPU
 		wasteMem := u.RequestMem - u.ActualMem
@@ -60,6 +66,7 @@ func (a *Analyzer) Run(usages []k8s.PodUsage) *Report {
 			continue
 		}
 		monthly := wasteCPU*a.cpuPrice*730 + wasteMem*a.memPrice*730
+		monthlyINR := wasteCPU*a.cpuPriceINR*730 + wasteMem*a.memPriceINR*730
 		if monthly < a.minWaste {
 			continue
 		}
@@ -72,21 +79,23 @@ func (a *Analyzer) Run(usages []k8s.PodUsage) *Report {
 			suggestMem = 0.1
 		}
 		r.Findings = append(r.Findings, Finding{
-			Kind:         "over-provisioned",
-			Namespace:    u.Namespace,
-			Workload:     u.Name,
-			OwnerKind:    u.OwnerKind,
-			OwnerName:    u.OwnerName,
-			RequestCPU:   u.RequestCPU,
-			RequestMem:   u.RequestMem,
-			ActualCPU:    u.ActualCPU,
-			ActualMem:    u.ActualMem,
-			WasteCPU:     wasteCPU,
-			WasteMem:     wasteMem,
-			WasteMonthly: monthly,
-			FixCommand:   fixCommand(u),
+			Kind:            "over-provisioned",
+			Namespace:       u.Namespace,
+			Workload:        u.Name,
+			OwnerKind:       u.OwnerKind,
+			OwnerName:       u.OwnerName,
+			RequestCPU:      u.RequestCPU,
+			RequestMem:      u.RequestMem,
+			ActualCPU:       u.ActualCPU,
+			ActualMem:       u.ActualMem,
+			WasteCPU:        wasteCPU,
+			WasteMem:        wasteMem,
+			WasteMonthly:    monthly,
+			WasteMonthlyINR: monthlyINR,
+			FixCommand:      fixCommand(u),
 		})
 		r.TotalWaste += monthly
+		r.TotalWasteINR += monthlyINR
 	}
 	return r
 }

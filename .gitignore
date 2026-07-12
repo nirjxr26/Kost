@@ -7,8 +7,9 @@
 /kost
 /kost.exe
 
-# Design doc (not project code)
+# Design docs (not project code)
 KOST.md
+ANALYSIS.md
 
 # IDE
 .idea/
@@ -20,6 +21,9 @@ KOST.md
 # OS
 .DS_Store
 Thumbs.db
+
+# Website (generated landing page)
+site/
 
 # Dependency dirs
 vendor/

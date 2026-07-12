@@ -37,5 +37,8 @@ func MetricsHandler(cluster string, latest *LatestReport) http.HandlerFunc {
 		fmt.Fprintf(w, "# HELP kost_waste_dollars Estimated monthly waste in USD\n")
 		fmt.Fprintf(w, "# TYPE kost_waste_dollars gauge\n")
 		fmt.Fprintf(w, "kost_waste_dollars{cluster=%q} %.2f %d\n", cluster, rep.TotalWaste, ts)
+		fmt.Fprintf(w, "# HELP kost_waste_inr Estimated monthly waste in Indian Rupees\n")
+		fmt.Fprintf(w, "# TYPE kost_waste_inr gauge\n")
+		fmt.Fprintf(w, "kost_waste_inr{cluster=%q} %.2f %d\n", cluster, rep.TotalWasteINR, ts)
 	}
 }

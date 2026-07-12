@@ -27,8 +27,9 @@ const (
 func main() {
 	cfg := loadConfig()
 	client := mustK8sClient()
-	an := analyze.New(cfg.ClusterName, cfg.WasteRatio, cfg.MinWaste, cfg.CPUPerCore, cfg.MemPerGB)
+	an := analyze.New(cfg.ClusterName, cfg.WasteRatio, cfg.MinWaste, cfg.CPUPerCore, cfg.MemPerGB, cfg.CPUPerCoreINR, cfg.MemPerGBINR)
 	latest := report.NewLatest()
+	history := report.NewReportHistory(200)
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
@@ -37,6 +38,8 @@ func main() {
 	mux.HandleFunc("/health", healthHandler)
 	mux.HandleFunc("/ready", readyHandler(client))
 	mux.HandleFunc("/metrics", report.MetricsHandler(cfg.ClusterName, latest))
+	mux.HandleFunc("/dashboard", report.DashboardHandler(history))
+	mux.HandleFunc("/api/reports", report.ReportsHandler(history))
 
 	srv := &http.Server{Addr: fmt.Sprintf(":%d", cfg.Port), Handler: mux}
 	go func() {
@@ -52,7 +55,7 @@ func main() {
 
 	log.Printf("kost started cluster=%q interval=%s", cfg.ClusterName, interval)
 
-	runAndReport(ctx, client, an, latest)
+	runAndReport(ctx, client, an, latest, history)
 	for {
 		select {
 		case <-ctx.Done():
@@ -62,7 +65,7 @@ func main() {
 			log.Println("shutdown complete")
 			return
 		case <-ticker.C:
-			runAndReport(ctx, client, an, latest)
+			runAndReport(ctx, client, an, latest, history)
 		}
 	}
 }
@@ -111,7 +114,7 @@ func mustK8sClient() *k8s.Client {
 	return client
 }
 
-func runAndReport(ctx context.Context, client *k8s.Client, an *analyze.Analyzer, latest *report.LatestReport) {
+func runAndReport(ctx context.Context, client *k8s.Client, an *analyze.Analyzer, latest *report.LatestReport, history *report.ReportHistory) {
 	ctx, cancel := context.WithTimeout(ctx, collectTimeout)
 	defer cancel()
 
@@ -122,6 +125,7 @@ func runAndReport(ctx context.Context, client *k8s.Client, an *analyze.Analyzer,
 	}
 	r := an.Run(usages)
 	latest.Store(r)
+	history.Push(r)
 	if err := report.Stdout(r); err != nil {
 		log.Printf("report: %v", err)
 	}
