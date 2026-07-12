@@ -10,6 +10,8 @@ data:
       "interval": "15m",
       "cpu_per_core_hour": 0.0316,
       "mem_per_gb_hour": 0.0042,
+      "cpu_per_core_hour_inr": 2.62,
+      "mem_per_gb_hour_inr": 0.35,
       "waste_ratio": 1.5,
       "min_waste_dollars": 5.00,
       "port": 8080

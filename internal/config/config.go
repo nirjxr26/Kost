@@ -10,24 +10,28 @@ import (
 const maxConfigSize = 1 << 20 // 1MB
 
 type Config struct {
-	ClusterName string  `json:"cluster_name"`
-	Interval    string  `json:"interval"`
-	CPUPerCore  float64 `json:"cpu_per_core_hour"`
-	MemPerGB    float64 `json:"mem_per_gb_hour"`
-	WasteRatio  float64 `json:"waste_ratio"`
-	MinWaste    float64 `json:"min_waste_dollars"`
-	Port        int     `json:"port"`
+	ClusterName  string  `json:"cluster_name"`
+	Interval     string  `json:"interval"`
+	CPUPerCore   float64 `json:"cpu_per_core_hour"`
+	MemPerGB     float64 `json:"mem_per_gb_hour"`
+	CPUPerCoreINR float64 `json:"cpu_per_core_hour_inr"`
+	MemPerGBINR  float64 `json:"mem_per_gb_hour_inr"`
+	WasteRatio   float64 `json:"waste_ratio"`
+	MinWaste     float64 `json:"min_waste_dollars"`
+	Port         int     `json:"port"`
 }
 
 func Default() *Config {
 	return &Config{
-		ClusterName: "unknown",
-		Interval:    "15m",
-		CPUPerCore:  0.0316,
-		MemPerGB:    0.0042,
-		WasteRatio:  1.5,
-		MinWaste:    5.00,
-		Port:        8080,
+		ClusterName:  "unknown",
+		Interval:     "15m",
+		CPUPerCore:   0.0316,
+		MemPerGB:     0.0042,
+		CPUPerCoreINR: 2.62,
+		MemPerGBINR:  0.35,
+		WasteRatio:   1.5,
+		MinWaste:     5.00,
+		Port:         8080,
 	}
 }
 

@@ -1,154 +1,211 @@
-# Kost
+<div align="center">
 
-**Kubernetes cost anomaly detection + right-sizing agent.**
+<h1>Kost</h1>
 
-Deploy once. Get JSON reports of over-provisioned workloads with exact `kubectl` fix commands. No dashboard to maintain, no SaaS to configure.
+</div>
+Kubernetes clusters waste **30–50% of compute** from over-provisioning. Kost sits in your cluster, polls the Metrics API every 15 minutes, and tells you exactly what's wasting money — with the `kubectl` command to fix it.
 
 ---
 
-## Quick Start
+## Overview
+
+Kost is a single-pod Go agent built for teams that want to know where their Kubernetes spend is being wasted without installing a dashboard-first platform or handing usage data to a third party.
+
+### Core design rules
+
+- **Push over pull** — alerts come to you via Slack, you don't go check a dashboard.
+- **Zero config to start** — every field has a default, the agent reports out of the box.
+- **Every alert is actionable** — a finding without a fix command isn't useful.
+- **Minimal footprint** — single pod, ~25MB image, no database.
+- **Honest scope** — pricing is approximate and documented as such; it's a signal, not a source of truth.
+
+---
+
+## Why Kost?
+
+| Feature | Kost | Typical Platforms |
+|---------|:----:|:-----------------:|
+| Zero config | ✅ | ⚠️ |
+| Single pod | ✅ | ❌ |
+| No database | ✅ | ❌ |
+| Push-first alerts | ✅ | ⚠️ |
+| Built-in dashboard | ✅ | ✅ |
+| Ready-to-run fixes | ✅ | ⚠️ |
+
+---
+# Features
+
+## Detection & Analysis
+
+- Polls the Kubernetes Metrics API and pod specs on a configurable interval (default **15m**).
+- Compares actual CPU/memory usage against each container's `resources.requests`.
+- Flags workloads where the request exceeds actual usage by **1.5×** and estimated waste clears **$5/month**.
+- Resolves the owner chain (**Pod → ReplicaSet → Deployment**) so fix commands target the correct resource.
+- Generates right-sizing suggestions at **actual usage × 1.3**, with a **0.1 core / 0.1 GB** floor.
+
+## Reporting & Observability
+
+- JSON reports to stdout on every cycle.
+- Prometheus metrics exposed on `/metrics`.
+- Dark-themed HTML dashboard on `/dashboard`.
+- In-memory rolling history of the last **200 reports** via `/api/reports`.
+- Optional Slack alerts via webhook.
+
+## Deployment & Operations
+
+- Single replica Deployment.
+- ~25MB image.
+- Runs as non-root (UID 65534).
+- Liveness and readiness probes.
+- Graceful shutdown.
+- Backup script for manifests, RBAC and metrics snapshot.
+
+## Security & RBAC
+
+- Read-only ClusterRole.
+- No write access.
+- No delete permissions.
+- No pod exec.
+- No secret reads.
+- Read-only ConfigMap mount.
+
+---
+
+# Tech Stack
+
+| Layer | Technologies |
+|-------|--------------|
+| Language | Go 1.22+ |
+| K8s Client | client-go, apimachinery, Metrics API (dynamic client) |
+| Metrics | Hand-written Prometheus text format |
+| Dashboard | Embedded HTML/CSS/vanilla JS (`go:embed`) |
+| Alerts | Slack Incoming Webhooks |
+| Deployment | Kubernetes, Docker (multi-stage) |
+| Code Quality | SonarCloud, go vet |
+
+---
+
+# Architecture Diagram
+
+```mermaid
+flowchart TD
+
+A[Kubernetes API]
+B[Metrics API]
+
+A --> C[Kost Agent]
+B --> C
+
+C --> D[Analyzer]
+
+D --> E[JSON]
+D --> F[Prometheus]
+D --> G[Dashboard]
+D --> H[Slack]
+```
+
+
+---
+
+# Quick Start
+
+## Clone the Repository
 
 ```bash
-# Create namespace and deploy
-kubectl create ns kost
-kubectl apply -f deploy/rbac.yaml -f deploy/configmap.yaml \
-              -f deploy/deployment.yaml -f deploy/service.yaml
+git clone https://github.com/nirjxr26/Kost.git
+cd Kost
+```
 
-# Check the first report
+## Deploy to Kubernetes
+
+```bash
+# Create namespace
+kubectl create ns kost
+
+# Deploy resources
+kubectl apply -f deploy/rbac.yaml \
+  -f deploy/configmap.yaml \
+  -f deploy/deployment.yaml \
+  -f deploy/service.yaml
+```
+
+> Every flagged workload includes the exact `kubectl set resources` command—copy, paste, and apply. Zero configuration is required.
+
+## Verify Deployment
+
+```bash
 kubectl logs -n kost deployment/kost --tail=20
 ```
 
-Output:
+Example output:
 
 ```json
-{"timestamp":"2026-07-01T10:15:02Z","cluster":"prod","total_waste_monthly":2847.00,"findings":[...],"healthy":false}
+{
+  "cluster": "prod",
+  "waste_monthly": 2847,
+  "healthy": false,
+  "findings": [
+    {
+      "workload": "auth-service",
+      "namespace": "prod",
+      "waste_monthly": 421,
+      "fix": "kubectl set resources deployment/auth-service -n prod --requests=cpu=0.3,memory=1434Mi"
+    }
+  ]
+}
 ```
 
----
+## Access the UI
 
-## How It Works
+### Port Forward
 
-1. Polls the Kubernetes Metrics API and pod specs every 15 minutes
-2. Compares actual CPU/memory usage to each container's `resources.requests`
-3. Flags workloads where `request > actual × 1.5` and estimated waste exceeds $5/month
-4. Resolves pod owners (Deployment, StatefulSet) so fix commands target the right resource
-5. Emits a JSON report to stdout and exposes Prometheus metrics on `:8080`
+```bash
+kubectl port-forward -n kost deployment/kost 8080:8080
+```
 
----
+| Endpoint | URL |
+| -------- | --- |
+| Dashboard | http://localhost:8080/dashboard |
+| Metrics | http://localhost:8080/metrics |
+| Reports API | http://localhost:8080/api/reports |
+| Health | http://localhost:8080/health |
 
-## Configuration
+## Local Development
 
-| Field | Default | Description |
-|-------|---------|-------------|
-| `cluster_name` | `"unknown"` | Label for metrics and reports |
-| `interval` | `"15m"` | Polling interval (minimum 1s) |
-| `cpu_per_core_hour` | `0.0316` | AWS m5 on-demand CPU cost per core-hour ($) |
-| `mem_per_gb_hour` | `0.0042` | AWS m5 on-demand memory cost per GB-hour ($) |
-| `waste_ratio` | `1.5` | Flag when request exceeds actual by this multiplier |
-| `min_waste_dollars` | `5.00` | Minimum monthly waste to include in report |
-| `port` | `8080` | HTTP server port for /metrics and /health |
+```bash
+go build -o kost ./cmd/kost/
+go vet ./...
+go test ./...
 
-### Via ConfigMap
+make image
+make push
+make deploy
+```
 
-Edit `deploy/configmap.yaml`, then `kubectl apply -f deploy/configmap.yaml` and restart the pod.
-
----
-
-## Slack Alerts (Optional)
+## Optional: Slack Alerts
 
 ```bash
 kubectl create secret generic kost-slack -n kost \
-  --from-literal=SLACK_WEBHOOK_URL="https://hooks.slack.com/services/xxx/xxx/xxx"
+  --from-literal=SLACK_WEBHOOK_URL="https://hooks.slack.com/services/T00/B00/your-webhook"
 ```
-
-The env var is wired end-to-end; the Slack reporter logic is deferred. Without it, reports are written to stdout.
-
 ---
 
-## Deployment
+# Project Structure
 
-### Requirements
-
-- Kubernetes 1.21+
-- metrics-server installed in the cluster
-- The agent runs as a single Deployment pod (~32MB memory, 50m CPU)
-
-### Manifests
-
-| File | Purpose |
-|------|---------|
-| `deploy/rbac.yaml` | ServiceAccount, ClusterRole (read-only), ClusterRoleBinding |
-| `deploy/configmap.yaml` | Default configuration |
-| `deployment.yaml` | Agent deployment (runAsNonRoot) |
-| `deploy/service.yaml` | Service exposing :8080 for Prometheus scrape |
-
-### Least-Privilege RBAC
-
-The ClusterRole grants only:
-
-- `metrics.k8s.io/pods: get, list` — pod resource usage
-- `pods: get, list, watch` — pod specs and owner references
-- `nodes, persistentvolumeclaims: get, list` — pricing context (future)
-
-No write, no exec, no secrets, no cluster-scoped delete.
-
----
-
-## Prometheus Metrics
-
-| Metric | Type | Description |
-|--------|------|-------------|
-| `kost_over_provisioned_count` | gauge | Number of over-provisioned workloads |
-| `kost_waste_dollars` | gauge | Estimated monthly waste in USD |
-
-Default scrape endpoint: `:8080/metrics`.
-
----
-
-## Development
-
-```bash
-make build    # go build -o kost ./cmd/kost/
-make image    # docker build -t ghcr.io/nirjar/kost:latest .
-make deploy   # kubectl apply all manifests
+```text
+├── cmd/
+│   └── kost/
+├── internal/
+│   ├── config/
+│   ├── k8s/
+│   ├── analyze/
+│   └── report/
+├── deploy/
+├── scripts/
+│   └── backup.sh
 ```
-
-### Prerequisites
-
-- Go 1.22+
-- Docker
-- Access to a Kubernetes cluster with metrics-server
-
-### Project Structure
-
-```
-cmd/kost/main.go              # Entry point, HTTP server, report loop
-internal/
-├── config/config.go          # JSON config loading and validation
-├── k8s/
-│   ├── client.go             # Kubernetes + Metrics API client
-│   └── quantity.go           # Pod resource quantity parser
-├── analyze/analyze.go        # Over-provisioned detection + fix commands
-└── report/
-    ├── stdout.go             # JSON stdout reporter
-    └── metrics.go           # Prometheus /metrics endpoint
-deploy/                        # Kubernetes manifests
-scripts/backup.sh             # Backup script for deployment state
-```
-
----
-
-## Backup
-
-```bash
-./scripts/backup.sh            # backup to ./backups/<timestamp>/
-./scripts/backup.sh kost .     # backup to current directory
-```
-
-Saves: Deployment, ConfigMap, Service, ServiceAccount, Secret, ClusterRole, ClusterRoleBinding, Prometheus metrics snapshot, health check.
-
----
 
 ## License
 
 MIT
+

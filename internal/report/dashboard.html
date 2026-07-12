@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kost · Cluster Cost</title>
+<style>
+:root{--bg:#0a0a0f;--surface:#12121a;--border:#1e1e2a;--text:#e2e2f0;--muted:#6b6b80;--accent:#22c55e;--accent-dim:#166534;--red:#ef4444;--amber:#eab308;--radius:10px}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'SF Mono','Fira Code','Cascadia Code',monospace;background:var(--bg);color:var(--text);padding:0;min-height:100vh;display:flex;align-items:center;justify-content:center}
+.wrap{width:100%;max-width:1280px;padding:32px 24px;margin:0 auto}
+.header{display:flex;align-items:center;justify-content:space-between;margin-bottom:32px;padding-bottom:20px;border-bottom:1px solid var(--border)}
+.hl{display:flex;align-items:center;gap:14px}
+.hl h1{font-size:1.25rem;font-weight:600;letter-spacing:-.01em;color:var(--text);text-transform:lowercase}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 8px var(--accent-dim)}
+.hr{display:flex;align-items:center;gap:24px}
+.tag{font-size:.6875rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+.tag span{color:var(--text)}
+.stat-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:28px}
+.stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px 24px;position:relative;overflow:hidden}
+.stat::before{content:'';position:absolute;top:0;left:0;width:100%;height:2px}
+.stat.waste::before{background:var(--red)}
+.stat.inr::before{background:var(--amber)}
+.stat.count::before{background:var(--accent)}
+.stat .l{font-size:.625rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:6px}
+.stat .v{font-size:2rem;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.stat .v.r{color:var(--red)}
+.stat .v.y{color:var(--amber)}
+.stat .v.g{color:var(--accent)}
+.section{margin-bottom:28px}
+.section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.section-header h2{font-size:.8125rem;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.section-header .count{font-size:.6875rem;color:var(--muted);background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:2px 10px}
+.table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:.8125rem}
+th{text-align:left;padding:12px 16px;font-size:.625rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);border-bottom:1px solid var(--border);background:var(--surface);position:sticky;top:0}
+td{padding:12px 16px;border-bottom:1px solid rgba(255,255,255,.03);white-space:nowrap}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:rgba(255,255,255,.02)}
+.wl{font-weight:500;color:var(--text)}
+.ns{font-size:.6875rem;color:var(--muted);margin-top:1px}
+.num{font-variant-numeric:tabular-nums;font-size:.75rem;color:var(--text)}
+.num-m{color:var(--accent);font-size:.75rem;font-variant-numeric:tabular-nums}
+.fx{color:var(--accent);font-size:.6875rem;max-width:380px;overflow:hidden;text-overflow:ellipsis;display:block;white-space:nowrap;cursor:default}
+.fx:hover{color:#4ade80}
+.bar-wrap{display:flex;align-items:center;gap:8px}
+.bar{height:4px;border-radius:2px;background:rgba(255,255,255,.06);flex:1;max-width:60px;overflow:hidden}
+.bar-fill{height:100%;border-radius:2px;background:var(--accent)}
+.bar-fill.r{background:var(--red)}
+.bar-fill.y{background:var(--amber)}
+.emp{padding:56px 24px;text-align:center;color:var(--muted);background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);font-size:.875rem}
+.emp p:first-child{margin-bottom:6px;color:var(--text)}
+.history{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:4px;max-height:260px;overflow-y:auto}
+.history::-webkit-scrollbar{width:4px}
+.history::-webkit-scrollbar-track{background:transparent}
+.history::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.hi{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-radius:6px;font-size:.75rem}
+.hi:hover{background:rgba(255,255,255,.02)}
+.hi .t{color:var(--muted)}
+.hi .w{color:var(--text);font-variant-numeric:tabular-nums}
+@media(max-width:640px){.wrap{padding:16px 12px}.stat-row{grid-template-columns:1fr}.hr{gap:12px}.header{flex-wrap:wrap;gap:12px}th,td{padding:8px 10px;font-size:.6875rem}.fx{max-width:160px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="header">
+<div class="hl">
+<div class="dot"></div>
+<h1>kost</h1>
+</div>
+<div class="hr">
+<div class="tag" id="cluster"></div>
+<div class="tag">last scan <span id="scan-time">—</span></div>
+</div>
+</div>
+<div class="stat-row" id="cards"></div>
+<div id="body"></div>
+</div>
+<script>
+function fmt(u){var d=new Date(u*1e3);return d.toLocaleDateString()+' '+d.toLocaleTimeString()}
+function d2(v){return Number(v).toFixed(2)}
+function wc(v){return v>500?'r':v>100?'y':'g'}
+function bar(w){var p=Math.min(w/10,100);return '<div class="bar"><div class="bar-fill'+wc(w)+'" style="width:'+p+'%"></div></div>'}
+async function load(){
+try{
+var h=await(await fetch('/api/reports')).json()
+if(!h||!h.length){document.getElementById('body').innerHTML='<div class="emp"><p>Waiting for first report</p><p>Reports appear every 15m after deployment.</p></div>';return}
+var r=h[0].report
+document.getElementById('cluster').innerHTML=r.cluster_name+'<span style="margin-left:4px;color:var(--accent)">●</span>'
+document.getElementById('scan-time').textContent=fmt(h[0].unix_time)
+var wcClass=wc(r.total_waste_monthly)
+document.getElementById('cards').innerHTML='<div class="stat waste"><div class="l">Monthly Waste (USD)</div><div class="v '+wcClass+'">$'+d2(r.total_waste_monthly)+'</div></div><div class="stat inr"><div class="l">Monthly Waste (INR)</div><div class="v y">₹'+d2(r.total_waste_monthly_inr)+'</div></div><div class="stat count"><div class="l">Over-Provisioned</div><div class="v">'+r.findings.length+'</div></div>'
+if(!r.findings.length){document.getElementById('body').innerHTML='<div class="emp"><p>No over-provisioned workloads</p><p>Cluster is well-sized.</p></div>';return}
+var rows=''
+r.findings.forEach(function(f){
+var wp=d2(f.waste_cpu)+'/'+d2(f.waste_mem)
+rows+='<tr><td><div class="wl">'+f.workload+'</div><div class="ns">'+f.namespace+'</div></td><td class="num">'+d2(f.request_cpu)+'<span style="color:var(--muted)">/'+d2(f.actual_cpu)+'</span></td><td class="num">'+d2(f.request_mem)+'<span style="color:var(--muted)">/'+d2(f.actual_mem)+'</span></td><td class="num">'+wp+'</td><td class="num-m">$'+d2(f.waste_monthly)+'</td><td class="num-m">₹'+d2(f.waste_monthly_inr)+'</td><td><code class="fx" title="'+f.fix_command+'">'+f.fix_command+'</code></td></tr>'
+})
+var hist=''
+h.forEach(function(e,i){
+if(!i)return
+hist+='<div class="hi"><span class="t">'+fmt(e.unix_time)+'</span><span class="w">$'+d2(e.report.total_waste_monthly)+' <span style="color:var(--muted)">₹'+d2(e.report.total_waste_monthly_inr)+'</span></span></div>'
+})
+var hc=r.findings.length>0?'<span class="count">'+r.findings.length+'</span>':''
+document.getElementById('body').innerHTML='<div class="section"><div class="section-header"><h2>Findings</h2>'+hc+'</div><div class="table-wrap"><table><thead><tr><th>Workload</th><th>CPU r/a</th><th>Mem r/a</th><th>Waste c/m</th><th>$/mo</th><th>₹/mo</th><th>Fix Command</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>'+(hist?'<div class="section"><div class="section-header"><h2>History</h2></div><div class="history">'+hist+'</div></div>':'')
+}catch(e){document.getElementById('body').innerHTML='<div class="emp"><p>Error loading data</p><p>'+e.message+'</p></div>'}
+}
+load()
+</script>
+</body>
+</html
